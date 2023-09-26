@@ -1,20 +1,20 @@
 %*******************************************************************************
-% Función: [s0,tau,c,Exx,iter,du] = AjustaModExp(datos,saltos,pesos,eg,parada)
-%          [s0,tau,c,Exx,iter,du] = AjustaModExp(datos,saltos,pesos,eg)
-%          [s0,tau,c,Exx,iter,du] = AjustaModExp(datos,saltos,pesos)
-%          [s0,tau,c,Exx,iter,du] = AjustaModExp(datos,saltos)
-%          [s0,tau,c,Exx,iter,du] = AjustaModExp(datos)
+% Función: [s0,c,Exx,du] = AjustaModExpFTau(datos,tau,saltos,pesos,eg)
+%          [s0,c,Exx,du] = AjustaModExpFTau(datos,tau,saltos,pesos)
+%          [s0,c,Exx,du] = AjustaModExpFTau(datos,tau,saltos)
+%          [s0,c,Exx,du] = AjustaModExpFTau(datos,tau)
 %
 % Propósito: Ajusta una serie de valores de deformación al modelo exponencial
 %            s=s0*(1-exp(-t/tau))+Sum[c(t>=t_k)], donde los parámetros a
-%            determinar son s0, tau y c(t>=t_k), generando estos últimos una
-%            función a trozos donde s0 y tau son comunes.
+%            determinar son s0 y c(t>=t_k), generando estos últimos una función
+%            a trozos donde s0 es comun.
 %
 % Entrada: - datos: Matriz de dos o tres columnas con los datos de trabajo:
 %                   - Col. 1: Instante de tiempo.
 %                   - Col. 2: Valor observado de s.
 %                   - Col. 3: Desviación típica del valor observado (esta
 %                             columna puede estar presente o no).
+%          - tau: Valor del parámetro tau.
 %          - saltos: Vector con los instantes de tiempo t_k en que se considera
 %                    que ha habido un salto en el valor de s para t>=t_k. Puede
 %                    pasarse un vector vacío (que es el valor por omisión).
@@ -32,24 +32,14 @@
 %                  significación para realzar el test de Pope, donde se eliminan
 %                  los puntos de uno en uno.
 %                Por omisión este parámetro vale 0.
-%          - parada: Vector de dos elementos con los criterios de parada del
-%                    proceso iterativo de ajuste:
-%                    - Pos. 1: Criterio de parada en función de la relación
-%                              norm(dx)/norm(x), donde norm() es la norma L2, dx
-%                              es la corrección al vector de incógnitas de la
-%                              iteración actual y x el vector de incógnitas.
-%                    - Pos. 2: Número máximo de iteraciones.
-%                    Por omisión, este argumento vale [0.0001 10].
 %
 % Salida: - s0: Valor ajustado del parámetro s0.
-%         - tau: Valor ajustado del parámetro tau.
 %         - c: Matriz de dos filas:
 %              - Fil. 1: Instantes de tiempo de los saltos.
 %              - Fil. 2: Valores ajustados de los posibles saltos, en el mismo
 %                        orden que hayan sido pasados en el argumento 'saltos'.
 %         - Exx: Matriz de varianzas-covarianzas a posteriori de las incógnitas,
 %                en el orden s0, tau y c(2,:).
-%         - iter: Número de iteraciones realizadas.
 %         - du: Vector booleano de la misma longitud que las filas de 'datos'.
 %               Los posibles valores de cada elemento son:
 %               - 0: El elemento correspondiente de la fila de 'datos' no se ha
@@ -60,27 +50,21 @@
 %                posteriori para el ajuste (s02=v'*P*v/gl, donde gl son los
 %                grados de libertad, filas-columnas de la matriz de diseño).
 %
-% Historia: 23-02-2023: Creación de la función
-%           José Luis García Pallero, jgpallero@gmail.com
-%           17-04-2023: Adición del parámetro de salida s02
+% Historia: 15-09-2023: Creación de la función
 %           José Luis García Pallero, jgpallero@gmail.com
 %*******************************************************************************
-function [s0,tau,c,Exx,iter,du,s02] = AjustaModExp(datos,saltos,pesos,eg,parada)
+function [s0,c,Exx,du] = AjustaModExpFTau(datos,tau,saltos,pesos,eg)
 
 %Posibles valores por omisión
 if nargin<5
-    %Impongo el criterio de parada
-    parada = [0.0001 10];
+    %Por omisión no se realiza detección de errores groseros
+    eg = 0;
     if nargin<4
-        %Por omisión no se realiza detección de errores groseros
-        eg = 0;
+        %Trabajo sin ponderar
+        pesos = 0;
         if nargin<3
-            %Trabajo sin ponderar
-            pesos = 0;
-            if nargin<2
-                %No considero saltos
-                saltos = [];
-            end
+            %No considero saltos
+            saltos = [];
         end
     end
 end
@@ -112,38 +96,14 @@ else
 end
 %Dimensiones de la matriz de datos
 fil = size(datos,1);
-%Posiciones de los 1/6 últimos datos y de los 1/15 primeros
-nu = floor(fil/6.0);
-pu = (fil-nu):fil;
-np = ceil(fil/15.0);
-pp = 1:np;
-%Primera aproximación de s0 como la media de los 1/6 últimos datos
-s0 = mean(datos(pu,2));
-%La primera aproximación a tau la calculo con el valor de s0 inicial y el
-%acortamiento medio del instante medio de los primeros 1/15 puntos
-%Hay que tener cuidado para que los valores de tiempo y acortamiento no sean
-%cero, lo que dará un valor inicial de rtau igual a NaN
-while 1
-    %Valor inicial de tau
-    tau = mean(datos(pp,1))/log(s0/(s0-mean(datos(pp,2))));
-    %Comprobamos si el valor obtenido es NaN y si se pueden seguir añadiendo
-    %puntos a los primeros
-    if isnan(tau)&&(length(pp)<fil)
-        %Añado un punto más a los primeros para estimar el valor inicial de tau
-        pp = [pp pp(end)+1];
-    else
-        %Salimos del bucle
-        break;
-    end
-end
 %En principio se usan todos los puntos
 du = logical(ones(fil,1));
 %Entro en un bucle infinito
 while 1
     %Realizo el ajuste
-    [s0,tau,c,v,A,P,Qxx,iter] = AjustaModExpAux(datos,s0,tau,c,pesos,parada);
+    [s0,c,v,A,P,Qxx] = AjustaModExpFTauAux(datos,tau,c,pesos);
     %Grados de libertad del ajuste
-    gl = fil-(2+size(c,2));
+    gl = fil-(1+size(c,2));
     %Varianza del observable de peso unidad a posteriori
     s02 = v'*P*v/gl;
     %Comprobamos si hay que realizar test de errores groseros
@@ -204,9 +164,8 @@ end
 Exx = s02*Qxx;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%Función auxiliar para realizar el ajuste (ha de recibir los valores iniciales
-%de las incógnitas)
-function [s0,tau,c,v,A,P,Q,iter] = AjustaModExpAux(datos,s0,tau,c,pesos,parada)
+%Función auxiliar para realizar el ajuste
+function [s0,c,v,A,P,Q] = AjustaModExpFTauAux(datos,tau,c,pesos)
 
 %Número de datos
 fil = size(datos,1);
@@ -214,61 +173,40 @@ col = size(datos,2);
 %Número de saltos
 ns = size(c,2);
 %Matrices de diseño y de pesos
-A = zeros(fil,2+ns);
+A = zeros(fil,1+ns);
 if pesos&&(col>2)
     P = diag(1.0./(datos(:,3).^2));
 else
     P = eye(fil);
 end
-%Vector de parámetros para el criterio de parada
-x0 = [s0 tau c(2,:)]';
-%Entramos en un bucle con, en principio, el número máximo de vueltas
-for iter=1:parada(2)
-    %Vector para almacenar la señal con los parámetros actuales
-    sc = zeros(fil,1);
-    %Calculo la señal en principio para todos los puntos
-    sc = s0*(1.0-exp(-datos(:,1)./tau));
-    %Recorro los posibles saltos
-    for i=1:ns
-        %Posiciones de los puntos tras el salto
-        pos = datos(:,1)>=c(1,i);
-        %Señal de los puntos posteriores al salto
-        sc(pos) = sc(pos)+c(2,i);
-        %Columnas de la matriz de diseño correspondientes a los saltos
-        A(pos,i+2) = 1.0;
-    end
-    %Vector término independiente para el ajuste
-    l = datos(:,2)-sc;
-    %Primera columna de la matriz de diseño (derivada con respecto a s0)
-    A(:,1) = 1.0-exp(-datos(:,1)./tau);
-    %Segunda columna de la matriz de diseño (derivada con respecto a tau)
-    A(:,2) = -s0*datos(:,1)./(tau^2).*exp(-datos(:,1)./tau);
-    %Sistema normal
-    N = A'*P*A;
-    d = A'*P*l;
-    %Solución
-    if exist('OCTAVE_VERSION')
-        Q = cholinv(N);
-    else
-        Q = inv(N);
-    end
-    x = Q*d;
-    %Actualizo los parámetros
-    s0 = s0+x(1);
-    tau = tau+x(2);
-    if ns
-        c(2,:) = c(2,:)+x(3:end)';
-    end
-    %Actualizo el vector de parámetros para el criterio de parada
-    x0 = [s0 tau c(2,:)]';
-    %Criterio de parada
-    if (norm(x)/norm(x0))<parada(1)
-        %Salgo del bucle
-        break;
-    end
+%Vector término independiente para el ajuste
+l = datos(:,2);
+%Primera columna de la matriz de diseño
+A(:,1) = 1.0-exp(-datos(:,1)./tau);
+%Recorro los posibles saltos
+for i=1:ns
+    %Posiciones de los puntos tras el salto
+    pos = datos(:,1)>=c(1,i);
+    %Columnas de la matriz de diseño correspondientes a los saltos
+    A(pos,i+1) = 1.0;
 end
+%Sistema normal
+N = A'*P*A;
+d = A'*P*l;
+%Solución
+if exist('OCTAVE_VERSION')
+    Q = cholinv(N);
+else
+    Q = inv(N);
+end
+x = Q*d;
 %Residuos
 v = A*x-l;
+%Incógnitas
+s0 = x(1);
+if ns
+    c(2,:) = x(2:end)';
+end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Copyright (c) 2023, J.L.G. Pallero. All rights reserved.
 %

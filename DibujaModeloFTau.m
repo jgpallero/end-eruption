@@ -1,24 +1,20 @@
 %Carga de datos
-datos = load('acortamiento-mazo-lp01.txt');
-% datos = load('volumenes-material.txt');
+datos = load('volumenes-material.txt');
 %Días (incluidos) entre los que se usarán observaciones para el ajuste
-%Se usarán>=diaIni y <=diaFin
-diaIni = 1;
-diaFin = 70;
+%Se usarán (dias>=diaIni).y.(dias<=diaFin)
+diaIni = 7.5;
+diaFin = 98;
+%Valor del parámetro Tau y su desviación típica
+tau = 22.5285;
+sTau = 1.0870;
 %Saltos (números de los días, todos los días >= están en el salto)
-% saltos = [0 45 49 62];
-saltos = [62];
-% saltos = [];
+saltos = [25,62];
 %Uso de ponderación: 0/1 -> no/sí
 pesos = 1;
-%Criterios de parada (norm(dx)/norm(x) y número máximo de iteraciones)
-parada = [0.0001 20];
 %Detección de errores groseros (eg==0 o eg>=1 no los busca, valor en (0,1)
 %quiere decir el nivel de significación del test de Pope y un número negativo es
 %el residuo máximo)
-% eg = 0.01;
-eg = -5.0;
-% eg = 0;
+eg = 0;
 %Días (incluidos) desde y hasta que se usarán datos para dibujar
 ddi = 0;
 ddf = 160;
@@ -55,10 +51,7 @@ p_dd_fin = p_dd_fin(end);
 datos_a = datos(p_dias_ini:p_dias_fin,:);
 datos_d = datos(p_dd_ini:p_dd_fin,:);
 %Realizo el ajuste
-[s0,tau,c,Exx,iter,du] = AjustaModExp(datos_a,saltos,pesos,eg,parada);
-if iter==parada(2)
-    error('Se ha llegado al número máximo de iteraciones para el ajuste');
-end
+[s0,c,Exx,du] = AjustaModExpFTau(datos_a,tau,saltos,pesos,eg);
 %Desviaciones típicas de los parámetros
 sx = sqrt(diag(Exx));
 %Calculamos con el modelo
@@ -67,9 +60,22 @@ for i=1:size(c,2)
     pos = datos_d(:,1)>=c(1,i);
     sc(pos) = sc(pos)+c(2,i);
 end
+%Adición a Exx de la varianza de Tau
+Exx_vieja = Exx;
+Exx = zeros(size(Exx_vieja,1)+1);
+if size(Exx_vieja,1)>1
+    Exx(3:end,1) = Exx_vieja(2:end,1);
+    Exx(1,3:end) = Exx_vieja(1,2:end);
+    Exx(3:end,3:end) = Exx_vieja(2:end,2:end);
+    Exx(1,1) = Exx_vieja(1,1);
+    Exx(2,2) = sTau^2;
+else
+    Exx(1,1) = Exx_vieja;
+    Exx(2,2) = sTau^2;
+end
 %Propagación de varianzas y covarianzas
 sxx = zeros(size(sc));
-J = zeros(1,2+size(c,2));
+J = zeros(1,1+size(c,2));
 datos_dd = [];
 for i=1:length(sc)
     %Matriz jacobiana
@@ -135,10 +141,10 @@ else
     titulo = sprintf(['%s',repmat(' %.4f,',1,size(c,2)),'] +/- ['],...
                       titulo,c(2,:));
     titulo = sprintf(['%s',repmat(' %.4f,',1,size(c,2)),'] (sigma)\n'],...
-                     titulo,sx(3:end));
+                     titulo,sx(2:end));
 end
-titulo = sprintf('%ss0=%.4f +/- %.4f (sigma), tau=%.4f +/- %.4f (sigma)',...
-                 titulo,s0,sx(1),tau,sx(2));
+titulo = sprintf('%ss0=%.4f +/- %.4f (sigma), tau=%.4f (fijado)',...
+                 titulo,s0,sx(1),tau);
 title(titulo);
 orden_leyenda = 'legend(''Datos usados en el ajuste''';
 if sum(~du)
@@ -150,19 +156,19 @@ end
 orden_leyenda = [orden_leyenda,');'];
 eval(orden_leyenda);
 grid('on');
-print('modelo_ajustado.png','-dpng');
+print('modelo_ajustado_ftau.png','-dpng');
 %Ficheros de resultados
-idf = fopen('puntos_usados.txt','wb');
+idf = fopen('puntos_usados_ftau.txt','wb');
 fprintf(idf,'%%Observaciones originales\n');
 fprintf(idf,'%%Puntos usados en el ajuste (errores groseros excluidos)\n');
-fprintf(idf,'%%Día  Acort.  (mm)   Sigma (mm)\n');
-fprintf(idf,['%3d ',repmat(' %14.7E',1,size(datos_a,2)-1),'\n'],datos_a(du,:)');
+fprintf(idf,'%%Día     Volumen        Sigma\n');
+fprintf(idf,['%6.2f ',repmat(' %14.7E',1,size(datos_a,2)-1),'\n'],datos_a(du,:)');
 fclose(idf);
-idf = fopen('puntos_modelo.txt','wb');
+idf = fopen('puntos_modelo_ftau.txt','wb');
 fprintf(idf,'%%Puntos calculados con el modelo\n');
 fprintf(idf,'%%El intervalo de confianza es %.3f\n',ic);
-fprintf(idf,'%%Día  Acort.  (mm)   Sigma (mm)\n');
-fprintf(idf,['%3d  %14.7E %14.7E\n'],[datos_d(:,1) sc se]');
+fprintf(idf,'%%Día     Volumen        Sigma\n');
+fprintf(idf,['%6.2f  %14.7E %14.7E\n'],[datos_d(:,1) sc se]');
 fclose(idf);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %Copyright (c) 2023, J.L.G. Pallero. All rights reserved.

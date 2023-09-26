@@ -1,12 +1,12 @@
-%Load a text file (columns separated by spaces):
-%Number_of_day  Baseline_shortening  Stdv_Baseline_Shortening
+%Carga de datos
 datos = load('acortamiento-mazo-lp01.txt');
 %Días a usar en los ajustes
 dini = 15;
 dfin = 125;
 %Incrementos de presiones
-dp = [0.01 0.02 0.05 0.1 0.2];
+dp = [0.01 0.02 0.025 0.05 0.1 0.2];
 %Saltos, pesos y criterios de parada
+% saltos = [0 45 49 62];
 saltos = [62];
 % saltos = [];
 pesos = 1;
@@ -15,10 +15,10 @@ parada = [0.0001 10];
 %quiere decir el nivel de significación del test de Pope y un número negativo es
 %el residuo máximo)
 % eg = 0.01;
-% eg = -5.0;
-eg = 0;
+eg = -5.0;
+% eg = 0;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%Posiciones de los días a usar y oara dibujar
+%Posiciones de los días a usar y para dibujar
 p_dini = find(datos(:,1)==dini);
 if length(p_dini)==0
     error('El día indicado en la variable ''dini'' no existe en el fichero');
@@ -94,7 +94,7 @@ fprintf(idf,['%3d   ',repmat('%8.3f',1,length(dp)),...
         [datos(p_dini:p_dfin,1) d' dt']');
 fclose(idf);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%Copyright (c) 2023, J.L.G. Pallero and M. Charco. All rights reserved.
+%Copyright (c) 2023, J.L.G. Pallero. All rights reserved.
 %
 %Redistribution and use in source and binary forms, with or without
 %modification, are permitted provided that the following conditions are met:
