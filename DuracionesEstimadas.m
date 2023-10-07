@@ -1,4 +1,6 @@
+%DURACIONES ESTIMADAS PARA DISTINTOS VALORES DE INCREMENTO DE PRESIÓN
 %Carga de datos
+%Fichero de tres columnas: número de día, señal a ajustar, desviación típica
 datos = load('acortamiento-mazo-lp01.txt');
 %Días a usar en los ajustes
 dini = 15;

@@ -1,4 +1,6 @@
+%AJUSTE DE S0 Y SALTOS, CON TAU FIJO
 %Carga de datos
+%Fichero de tres columnas: número de día, señal a ajustar, desviación típica
 datos = load('volumenes-material.txt');
 %Días (incluidos) entre los que se usarán observaciones para el ajuste
 %Se usarán (dias>=diaIni).y.(dias<=diaFin)
